@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     env,
     fmt::{Display, Write},
 };
@@ -9,6 +10,7 @@ enum Bencode {
     String(String),
     Integer(i64),
     List(Vec<Bencode>),
+    Dictionary(HashMap<String, Bencode>),
 }
 
 impl Display for Bencode {
@@ -17,7 +19,7 @@ impl Display for Bencode {
             Bencode::String(s) => f.write_str(format!(r#""{s}""#).as_str()),
             Bencode::Integer(i) => f.write_str(format!("{i}").as_str()),
             Bencode::List(l) => {
-                f.write_char('[').unwrap();
+                f.write_char('[')?;
 
                 for (i, bencode) in l.iter().enumerate() {
                     f.write_str(format!("{bencode}").as_str())?;
@@ -27,6 +29,18 @@ impl Display for Bencode {
                 }
 
                 f.write_char(']')
+            }
+            Bencode::Dictionary(d) => {
+                f.write_char('{')?;
+
+                for (i, (key, value)) in d.iter().enumerate() {
+                    f.write_str(format!(r#""{key}": {value}"#).as_str())?;
+                    if i + 1 < d.len() {
+                        f.write_str(", ")?;
+                    }
+                }
+
+                f.write_char('}')
             }
         }
     }
@@ -82,6 +96,27 @@ fn decode_bencoded_value(encoded_value: &str) -> (Bencode, &str) {
             }
 
             return (Bencode::List(list), "");
+        }
+        'd' => {
+            let mut dict_string = encoded_value
+                .strip_prefix('d')
+                .unwrap()
+                .strip_suffix('e')
+                .unwrap();
+
+            let mut dict = HashMap::new();
+
+            while let (Bencode::String(key), rest) = decode_bencoded_value(dict_string) {
+                let (value, rest) = decode_bencoded_value(rest);
+                dict.insert(key, value);
+                if rest == "" {
+                    break;
+                }
+
+                dict_string = rest
+            }
+
+            return (Bencode::Dictionary(dict), "");
         }
         _ => panic!("Unhandled encoded value: {}", encoded_value),
     }
@@ -148,6 +183,18 @@ mod tests {
                 ]),
                 ""
             )
+        )
+    }
+
+    #[test]
+    fn decode_bencode_dictionary() {
+        let mut test = HashMap::new();
+        test.insert("foo".to_string(), Bencode::String("bar".to_string()));
+        test.insert("hello".to_string(), Bencode::Integer(52));
+
+        assert_eq!(
+            decode_bencoded_value("d3:foo3:bar5:helloi52ee"),
+            (Bencode::Dictionary(test), "")
         )
     }
 }
