@@ -77,41 +77,31 @@ fn decode_bencoded_value(encoded_value: &str) -> (Bencode, &str) {
             return (Bencode::Integer(number), rest);
         }
         'l' => {
-            let mut list_string = encoded_value
-                .strip_prefix('l')
-                .unwrap()
-                .strip_suffix('e')
-                .unwrap();
+            let mut list_string = encoded_value.strip_prefix('l').unwrap();
 
             let mut list = Vec::new();
 
             loop {
                 let (decoded_value, rest) = decode_bencoded_value(list_string);
                 list.push(decoded_value);
-                if rest == "" {
-                    break;
+                if rest.chars().next().unwrap() == 'e' {
+                    return (Bencode::List(list), rest.strip_prefix('e').unwrap());
                 };
 
                 list_string = rest
             }
-
-            return (Bencode::List(list), "");
         }
         'd' => {
-            let mut dict_string = encoded_value
-                .strip_prefix('d')
-                .unwrap()
-                .strip_suffix('e')
-                .unwrap();
+            let mut dict_string = encoded_value.strip_prefix('d').unwrap();
 
             let mut dict = HashMap::new();
 
             while let (Bencode::String(key), rest) = decode_bencoded_value(dict_string) {
                 let (value, rest) = decode_bencoded_value(rest);
                 dict.insert(key, value);
-                if rest == "" {
-                    break;
-                }
+                if rest.chars().next().unwrap() == 'e' {
+                    return (Bencode::Dictionary(dict), rest.strip_prefix('e').unwrap());
+                };
 
                 dict_string = rest
             }
@@ -122,16 +112,11 @@ fn decode_bencoded_value(encoded_value: &str) -> (Bencode, &str) {
     }
 }
 
-// Usage: your_bittorrent.sh decode "<encoded_value>"
 fn main() {
     let args: Vec<String> = env::args().collect();
     let command = &args[1];
 
     if command == "decode" {
-        // You can use print statements as follows for debugging, they'll be visible when running tests.
-        // println!("Logs from your program will appear here!");
-
-        // Uncomment this block to pass the first stage
         let encoded_value = &args[2];
         let decoded_value = decode_bencoded_value(encoded_value);
         println!("{}", decoded_value.0.to_string());
